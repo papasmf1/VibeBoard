@@ -2,20 +2,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { storage } from '@/lib/storage'
 
 export async function GET() {
-  const posts = storage.getAllPosts()
-  return NextResponse.json(posts)
+  try {
+    const posts = await storage.getAllPosts()
+    return NextResponse.json(posts)
+  } catch (error) {
+    console.error('Failed to fetch posts:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch posts' },
+      { status: 500 }
+    )
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
+  try {
+    const body = await request.json()
 
-  if (!body.title || !body.content || !body.author) {
+    if (!body.title || !body.content || !body.author) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      )
+    }
+
+    const post = await storage.createPost(body)
+    return NextResponse.json(post, { status: 201 })
+  } catch (error) {
+    console.error('Failed to create post:', error)
     return NextResponse.json(
-      { error: 'Missing required fields' },
-      { status: 400 }
+      { error: error instanceof Error ? error.message : 'Failed to create post' },
+      { status: 500 }
     )
   }
-
-  const post = storage.createPost(body)
-  return NextResponse.json(post, { status: 201 })
 }
