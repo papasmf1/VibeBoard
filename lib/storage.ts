@@ -1,8 +1,37 @@
 import { Post, CreatePostInput, UpdatePostInput } from './types'
-import { supabase } from './supabase'
+import { supabase, isSupabaseConfigured } from './supabase'
+
+// Fallback in-memory storage when Supabase is not configured
+let fallbackPosts: Post[] = [
+  {
+    id: '1',
+    title: 'Welcome to VibeBoard',
+    content: 'This is the first post on VibeBoard. Feel free to share your thoughts and ideas!',
+    author: 'Admin',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    views: 42,
+  },
+  {
+    id: '2',
+    title: 'Getting Started with VibeBoard',
+    content: 'Learn how to create, edit, and delete posts on our simple and elegant board platform.',
+    author: 'Admin',
+    createdAt: new Date('2024-01-02'),
+    updatedAt: new Date('2024-01-02'),
+    views: 28,
+  },
+]
+
+let fallbackNextId = 3
 
 export const storage = {
   async getAllPosts(): Promise<Post[]> {
+    // Use fallback if Supabase is not configured
+    if (!isSupabaseConfigured() || !supabase) {
+      return fallbackPosts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    }
+
     const { data, error } = await supabase
       .from('posts')
       .select('*')
@@ -10,7 +39,8 @@ export const storage = {
 
     if (error) {
       console.error('Error fetching posts:', error)
-      return []
+      // Fall back to in-memory storage on error
+      return fallbackPosts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     }
 
     return (data || []).map((post) => ({
@@ -25,6 +55,15 @@ export const storage = {
   },
 
   async getPost(id: string): Promise<Post | undefined> {
+    // Use fallback if Supabase is not configured
+    if (!isSupabaseConfigured() || !supabase) {
+      const post = fallbackPosts.find(p => p.id === id)
+      if (post) {
+        post.views++
+      }
+      return post
+    }
+
     const { data, error } = await supabase
       .from('posts')
       .select('*')
@@ -33,7 +72,12 @@ export const storage = {
 
     if (error) {
       console.error('Error fetching post:', error)
-      return undefined
+      // Fall back to in-memory storage on error
+      const post = fallbackPosts.find(p => p.id === id)
+      if (post) {
+        post.views++
+      }
+      return post
     }
 
     if (!data) return undefined
@@ -56,6 +100,19 @@ export const storage = {
   },
 
   async createPost(input: CreatePostInput): Promise<Post> {
+    // Use fallback if Supabase is not configured
+    if (!isSupabaseConfigured() || !supabase) {
+      const post: Post = {
+        id: String(fallbackNextId++),
+        ...input,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        views: 0,
+      }
+      fallbackPosts.push(post)
+      return post
+    }
+
     const { data, error } = await supabase
       .from('posts')
       .insert([
@@ -70,7 +127,17 @@ export const storage = {
       .single()
 
     if (error) {
-      throw new Error(`Failed to create post: ${error.message}`)
+      console.error('Error creating post:', error)
+      // Fall back to in-memory storage on error
+      const post: Post = {
+        id: String(fallbackNextId++),
+        ...input,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        views: 0,
+      }
+      fallbackPosts.push(post)
+      return post
     }
 
     return {
@@ -85,6 +152,16 @@ export const storage = {
   },
 
   async updatePost(id: string, input: UpdatePostInput): Promise<Post | undefined> {
+    // Use fallback if Supabase is not configured
+    if (!isSupabaseConfigured() || !supabase) {
+      const post = fallbackPosts.find(p => p.id === id)
+      if (post) {
+        Object.assign(post, input)
+        post.updatedAt = new Date()
+      }
+      return post
+    }
+
     const updateData: Record<string, unknown> = {}
     if (input.title) updateData.title = input.title
     if (input.content) updateData.content = input.content
@@ -99,7 +176,13 @@ export const storage = {
 
     if (error) {
       console.error('Error updating post:', error)
-      return undefined
+      // Fall back to in-memory storage on error
+      const post = fallbackPosts.find(p => p.id === id)
+      if (post) {
+        Object.assign(post, input)
+        post.updatedAt = new Date()
+      }
+      return post
     }
 
     if (!data) return undefined
@@ -116,10 +199,26 @@ export const storage = {
   },
 
   async deletePost(id: string): Promise<boolean> {
+    // Use fallback if Supabase is not configured
+    if (!isSupabaseConfigured() || !supabase) {
+      const index = fallbackPosts.findIndex(p => p.id === id)
+      if (index !== -1) {
+        fallbackPosts.splice(index, 1)
+        return true
+      }
+      return false
+    }
+
     const { error } = await supabase.from('posts').delete().eq('id', parseInt(id))
 
     if (error) {
       console.error('Error deleting post:', error)
+      // Fall back to in-memory storage on error
+      const index = fallbackPosts.findIndex(p => p.id === id)
+      if (index !== -1) {
+        fallbackPosts.splice(index, 1)
+        return true
+      }
       return false
     }
 

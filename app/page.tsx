@@ -14,10 +14,16 @@ export default function Home() {
     const fetchPosts = async () => {
       try {
         const response = await fetch('/api/posts')
+        if (!response.ok) {
+          console.error('API error:', response.status, response.statusText)
+          setPosts([])
+          return
+        }
         const data = await response.json()
-        setPosts(data)
+        setPosts(data || [])
       } catch (error) {
         console.error('Failed to fetch posts:', error)
+        setPosts([])
       } finally {
         setLoading(false)
       }
